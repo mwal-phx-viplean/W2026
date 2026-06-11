@@ -36,60 +36,74 @@ const URL_ATTRS = ['src', 'data-src', 'poster', 'href'];
 
 export default {
   async fetch(request) {
-    const incoming = new URL(request.url);
+    try {
+      const incoming = new URL(request.url);
 
-    // Accept both `/__feed/<host>/...` and `/<host>/...` (Render strips /__feed).
-    let rest = incoming.pathname;
-    if (rest.startsWith('/__feed/')) rest = rest.slice('/__feed'.length);
-    const m = rest.match(/^\/([^/]+)(\/.*)?$/);
-    if (!m) return new Response('Bad proxy path', { status: 400 });
+      // Accept both `/__feed/<host>/...` and `/<host>/...`.
+      let rest = incoming.pathname;
+      if (rest.startsWith('/__feed/')) rest = rest.slice('/__feed'.length);
+      const m = rest.match(/^\/([^/]+)(\/.*)?$/);
+      if (!m) return new Response('Bad proxy path: ' + incoming.pathname, { status: 400 });
 
-    const host = m[1];
-    const path = m[2] || '/';
-    const target = `https://${host}${path}${incoming.search}`;
-
-    const reqHeaders = stripRequestHeaders(request.headers);
-    const referer = REFERER_BY_HOST[host];
-    if (referer) {
-      reqHeaders.set('referer', referer);
-      try {
-        reqHeaders.set('origin', new URL(referer).origin);
-      } catch {
-        /* ignore */
+      const host = m[1];
+      // Guard against a malformed host (e.g. an un-expanded `:splat`) so we
+      // return a readable 400 instead of throwing an opaque 1101.
+      if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(host)) {
+        return new Response('Bad upstream host: ' + host, { status: 400 });
       }
-    }
+      const path = m[2] || '/';
+      const target = `https://${host}${path}${incoming.search}`;
 
-    const upstream = await fetch(target, {
-      method: request.method,
-      headers: reqHeaders,
-      body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-      redirect: 'follow',
-    });
+      const reqHeaders = stripRequestHeaders(request.headers);
+      const referer = REFERER_BY_HOST[host];
+      if (referer) {
+        reqHeaders.set('referer', referer);
+        try {
+          reqHeaders.set('origin', new URL(referer).origin);
+        } catch {
+          /* ignore */
+        }
+      }
 
-    const headers = new Headers(upstream.headers);
-    headers.delete('x-frame-options');
-    headers.delete('content-security-policy');
-    headers.delete('content-security-policy-report-only');
-    headers.set('access-control-allow-origin', '*');
+      const upstream = await fetch(target, {
+        method: request.method,
+        headers: reqHeaders,
+        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+        redirect: 'follow',
+      });
 
-    const type = headers.get('content-type') || '';
-    if (!type.includes('text/html')) {
-      return new Response(upstream.body, {
+      const headers = new Headers(upstream.headers);
+      headers.delete('x-frame-options');
+      headers.delete('content-security-policy');
+      headers.delete('content-security-policy-report-only');
+      // The runtime fetch already decoded the body, so the upstream's
+      // content-encoding/length are now stale — leaving them makes downstream
+      // proxies (Render) fail to decode and return 500.
+      headers.delete('content-encoding');
+      headers.delete('content-length');
+      headers.set('access-control-allow-origin', '*');
+
+      const type = headers.get('content-type') || '';
+      if (!type.includes('text/html')) {
+        return new Response(upstream.body, {
+          status: upstream.status,
+          statusText: upstream.statusText,
+          headers,
+        });
+      }
+
+      const response = new Response(upstream.body, {
         status: upstream.status,
         statusText: upstream.statusText,
         headers,
       });
+      return new HTMLRewriter()
+        .on('*', new UrlRewriter(host))
+        .on('head', new ScriptInjector(host))
+        .transform(response);
+    } catch (e) {
+      return new Response('Proxy error: ' + (e && e.message ? e.message : e), { status: 502 });
     }
-
-    const response = new Response(upstream.body, {
-      status: upstream.status,
-      statusText: upstream.statusText,
-      headers,
-    });
-    return new HTMLRewriter()
-      .on('*', new UrlRewriter(host))
-      .on('head', new ScriptInjector(host))
-      .transform(response);
   },
 };
 
