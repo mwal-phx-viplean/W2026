@@ -1,0 +1,14 @@
+{
+  "//": "DEV-ONLY CORS workaround for `ng serve`. The browser hits /__feed/* on",
+  "//2": "localhost (same origin), and this dev server fetches it from `target`",
+  "//3": "server-side (no CORS there) and streams it back. If you point",
+  "//4": "DATA_SOURCE_URL at a different host, update `target` below to match.",
+  "//5": "NOTE: this does NOT exist in a production build — the host must then",
+  "//6": "send Access-Control-Allow-Origin itself.",
+  "/__feed": {
+    "target": "https://sportsonline.pk",
+    "secure": true,
+    "changeOrigin": true,
+    "pathRewrite": { "^/__feed": "" }
+  }
+}

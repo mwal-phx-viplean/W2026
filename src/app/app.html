@@ -1,0 +1,67 @@
+<div class="container py-4">
+
+  <header class="mb-3 d-flex flex-wrap align-items-baseline justify-content-between">
+    <h1 class="h3 mb-0">📺 Programme — Démo</h1>
+    @if (schedule()?.lastUpdate) {
+      <span class="badge text-bg-light border">Dernière mise à jour : {{ schedule()!.lastUpdate }}</span>
+    }
+  </header>
+
+  @if (loading()) {
+    <div class="d-flex align-items-center gap-2 text-muted">
+      <div class="spinner-border spinner-border-sm" role="status"></div>
+      <span>Chargement des données…</span>
+    </div>
+  } @else {
+
+    <!-- Day tabs (none if the file is empty or not in the expected format) -->
+    <ul class="nav nav-tabs mb-3">
+      @for (day of schedule()?.days ?? []; track day.name) {
+        <li class="nav-item">
+          <button
+            type="button"
+            class="nav-link"
+            [class.active]="day.name === activeDay()"
+            (click)="selectDay(day.name)">
+            {{ day.name }}
+            <span class="badge rounded-pill text-bg-secondary ms-1">{{ day.events.length }}</span>
+          </button>
+        </li>
+      }
+    </ul>
+
+    <!-- Events table for the active day (empty when nothing matched) -->
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light">
+          <tr>
+            <th scope="col" class="text-nowrap" style="width: 6rem;">Heure</th>
+            <th scope="col">Événement</th>
+            <th scope="col">Chaînes</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (event of activeEvents(); track event.time + '|' + event.title) {
+            <tr>
+              <td class="fw-semibold font-monospace text-nowrap">{{ event.time }}</td>
+              <td>{{ event.title }}</td>
+              <td>
+                @for (link of event.links; track link.url) {
+                  <button
+                    type="button"
+                    [class]="'btn btn-sm me-1 mb-1 ' + btnClass(link)"
+                    [title]="link.label + (link.language ? ' — ' + link.language : '') + ' (' + link.url + ')'"
+                    (click)="open(link)">
+                    {{ link.label }}@if (link.language) {<span> · {{ link.language }}</span>}
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+  }
+
+</div>

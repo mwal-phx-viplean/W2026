@@ -1,0 +1,18 @@
+:host {
+  display: block;
+  background: #f8f9fa;
+  min-height: 100vh;
+}
+
+.nav-tabs .nav-link {
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.table td .btn {
+  --bs-btn-padding-y: 0.15rem;
+  --bs-btn-padding-x: 0.5rem;
+  --bs-btn-font-size: 0.78rem;
+  font-weight: 600;
+}
