@@ -1,11 +1,21 @@
 <div class="container py-4">
 
   <header class="mb-3 d-flex flex-wrap align-items-baseline justify-content-between">
-    <h1 class="h3 mb-0">📺 Programme — Démo</h1>
+    <h1 class="h3 mb-0">📺 Live Stream Schedule</h1>
     @if (schedule()?.lastUpdate) {
       <span class="badge text-bg-light border">Dernière mise à jour : {{ schedule()!.lastUpdate }}</span>
     }
   </header>
+
+  <!-- App update prompt — shown only when a new version has been downloaded. -->
+  @if (updateAvailable()) {
+    <div class="alert alert-primary d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
+      <span>🎉 Une nouvelle version de l'application est disponible.</span>
+      <button type="button" class="btn btn-primary btn-sm" (click)="applyUpdate()">
+        Mettre à jour
+      </button>
+    </div>
+  }
 
   @if (loading()) {
     <div class="d-flex align-items-center gap-2 text-muted">
@@ -50,7 +60,7 @@
                   <button
                     type="button"
                     [class]="'btn btn-sm me-1 mb-1 ' + btnClass(link)"
-                    [title]="link.label + (link.language ? ' — ' + link.language : '') + ' (' + link.url + ')'"
+                    [title]="link.label + (link.language ? ' — ' + link.language : '')"
                     (click)="open(link)">
                     {{ link.label }}@if (link.language) {<span> · {{ link.language }}</span>}
                   </button>
@@ -62,6 +72,30 @@
       </table>
     </div>
 
+  }
+
+  <!-- Embedded player: streams open here, inside the site. The remote host is
+       never shown — the iframe loads the same-origin /__feed proxy path. -->
+  @if (playerLink(); as link) {
+    <div class="player-backdrop" (click)="closePlayer()">
+      <div class="player-dialog" (click)="$event.stopPropagation()">
+        <div class="player-bar">
+          <span class="player-title">
+            ▶ {{ link.label }}@if (link.language) {<span class="text-secondary"> · {{ link.language }}</span>}
+          </span>
+          <button type="button" class="btn-close btn-close-white" aria-label="Fermer" (click)="closePlayer()"></button>
+        </div>
+        <div class="player-frame">
+          @if (playerSrc(); as src) {
+            <iframe
+              [src]="src"
+              referrerpolicy="no-referrer"
+              allow="autoplay; fullscreen; encrypted-media"
+              allowfullscreen></iframe>
+          }
+        </div>
+      </div>
+    </div>
   }
 
 </div>

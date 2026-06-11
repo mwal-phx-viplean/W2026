@@ -1,26 +1,22 @@
 import { HttpInterceptorFn } from '@angular/common/http';
+import { toFeedPath } from './feed-url';
 
 /**
  * CORS workaround, active in BOTH dev and prod.
  *
  * Any absolute http(s) request is transparently rewritten to the same-origin
- * `/__feed/*` path, so the browser never makes a cross-origin call and CORS
- * never applies. Something server-side then proxies `/__feed/*` to the remote
- * host (where CORS does not exist) and streams the response back:
- *   - dev  (`ng serve`): the dev server proxy — see proxy.conf.json
- *   - prod (Render static site): a Rewrite rule
- *       Source `/__feed/prog.txt` → Destination `https://sportsonline.pk/prog.txt`
+ * `/__feed/<host>/*` path, so the browser never makes a cross-origin call and
+ * CORS never applies. Something server-side then proxies it to the remote host
+ * (where CORS does not exist) and streams the response back:
+ *   - dev  (`ng serve`): the dev server proxy — see proxy.conf.cjs
+ *   - prod (Render static site): a Rewrite rule `/__feed/* -> Cloudflare Worker`
  *
- * If you host elsewhere, replicate that one rewrite rule on your host.
+ * The `<host>` segment lets one generic proxy reach any upstream host. See
+ * feed-url.ts (shared with the in-app stream player) and deploy/cloudflare-worker.js.
  */
 export const devProxyInterceptor: HttpInterceptorFn = (req, next) => {
   if (/^https?:\/\//i.test(req.url)) {
-    try {
-      const u = new URL(req.url);
-      return next(req.clone({ url: '/__feed' + u.pathname + u.search }));
-    } catch {
-      // Malformed URL — fall through and let it fail normally.
-    }
+    return next(req.clone({ url: toFeedPath(req.url) }));
   }
   return next(req);
 };
