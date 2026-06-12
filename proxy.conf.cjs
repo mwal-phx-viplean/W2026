@@ -105,7 +105,11 @@ const entry = {
   configure(proxy) {
     proxy.on('proxyReq', (proxyReq, req) => {
       proxyReq.setHeader('accept-encoding', 'identity'); // so we can rewrite HTML as text
-      proxyReq.setHeader('referer', ALLOWED_REFERER); // unlock domain-protected players
+      // Unlock domain-protected players, but NOT the schedule `.txt` feed (its
+      // host may hotlink-protect against a foreign referer).
+      if (!(req.url || '').split('?')[0].endsWith('.txt')) {
+        proxyReq.setHeader('referer', ALLOWED_REFERER);
+      }
       // Capture THIS request's upstream host now (synchronous, before the shared
       // `entry.target` can be reassigned by a later concurrent request).
       try {

@@ -27,10 +27,12 @@
  * host, and add it to REFERER_BY_HOST with the allowed referer.
  */
 
-/** Hosts that only serve content when the request Referer is an allowed domain. */
-const REFERER_BY_HOST = {
-  'swopglow.net': 'https://ww2.sporttsonline.click/',
-};
+/**
+ * The domain these players accept as the embedding ("allowed") site. Injected as
+ * the `Referer` on every upstream request so "domain protected" players (swopglow,
+ * mindsleep, *.dynadopt, ...) serve the video instead of "NOT ALLOWED".
+ */
+const ALLOWED_REFERER = 'https://ww2.sporttsonline.click/';
 
 const URL_ATTRS = ['src', 'data-src', 'poster', 'href'];
 
@@ -55,21 +57,21 @@ export default {
       const target = `https://${host}${path}${incoming.search}`;
 
       const reqHeaders = stripRequestHeaders(request.headers);
-      const referer = REFERER_BY_HOST[host];
-      if (referer) {
-        reqHeaders.set('referer', referer);
-        try {
-          reqHeaders.set('origin', new URL(referer).origin);
-        } catch {
-          /* ignore */
-        }
+      // Inject the unlock referer for player pages, but NOT for the schedule
+      // `.txt` feed, whose host may hotlink-protect against a foreign referer.
+      if (!path.split('?')[0].endsWith('.txt')) {
+        reqHeaders.set('referer', ALLOWED_REFERER);
       }
 
+      const bodyless = request.method === 'GET' || request.method === 'HEAD';
       const upstream = await fetch(target, {
         method: request.method,
         headers: reqHeaders,
-        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+        body: bodyless ? undefined : request.body,
         redirect: 'follow',
+        // A streamed request body requires `duplex: 'half'` or fetch throws (was
+        // causing 502 on the player's POST /api/event telemetry).
+        ...(bodyless ? {} : { duplex: 'half' }),
       });
 
       const headers = new Headers(upstream.headers);

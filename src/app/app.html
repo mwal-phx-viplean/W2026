@@ -7,16 +7,6 @@
     }
   </header>
 
-  <!-- App update prompt — shown only when a new version has been downloaded. -->
-  @if (updateAvailable()) {
-    <div class="alert alert-primary d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
-      <span>🎉 Une nouvelle version de l'application est disponible.</span>
-      <button type="button" class="btn btn-primary btn-sm" (click)="applyUpdate()">
-        Mettre à jour
-      </button>
-    </div>
-  }
-
   @if (loading()) {
     <div class="d-flex align-items-center gap-2 text-muted">
       <div class="spinner-border spinner-border-sm" role="status"></div>
