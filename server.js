@@ -20,11 +20,16 @@
  */
 const express = require('express');
 const path = require('node:path');
-const { Readable } = require('node:stream');
+const { Readable, pipeline } = require('node:stream');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const STATIC_DIR = path.join(__dirname, 'dist', 'prog-viewer', 'browser');
+
+// A single bad upstream/stream must never take the whole server down (a crashed
+// process is what returns "Not Found" to every visitor on the free tier).
+process.on('uncaughtException', (e) => console.error('uncaughtException:', e?.message || e));
+process.on('unhandledRejection', (e) => console.error('unhandledRejection:', e?.message || e));
 
 /** Fallback referer for domain-protected players that send no usable referer. */
 const ALLOWED_REFERER = 'https://ww2.sporttsonline.click/';
@@ -137,12 +142,18 @@ app.use('/__feed', express.raw({ type: () => true, limit: '25mb' }), async (req,
     if (fwdRef) headers['referer'] = fwdRef;
     else if (!upath.endsWith('.txt')) headers['referer'] = ALLOWED_REFERER;
 
+    // Abort the upstream when the client goes away (seek/close), so segment
+    // fetches don't pile up on a small free instance.
+    const ac = new AbortController();
+    res.on('close', () => ac.abort());
+
     const bodyless = req.method === 'GET' || req.method === 'HEAD';
     const upstream = await fetch(target, {
       method: req.method,
       headers,
       body: bodyless || !req.body || !req.body.length ? undefined : req.body,
       redirect: 'follow',
+      signal: ac.signal,
     });
 
     const out = {};
@@ -163,11 +174,31 @@ app.use('/__feed', express.raw({ type: () => true, limit: '25mb' }), async (req,
       res.set(out).send(rewriteHtml(buf.toString('utf8'), host));
     } else {
       res.set(out);
-      if (upstream.body) Readable.fromWeb(upstream.body).pipe(res);
-      else res.end();
+      if (upstream.body) {
+        // Stream through, but swallow client-abort/upstream errors so they can't
+        // crash the process.
+        pipeline(Readable.fromWeb(upstream.body), res, (err) => {
+          if (err && err.name !== 'AbortError') {
+            console.error('proxy pipe:', err.message);
+            if (!res.headersSent) {
+              try {
+                res.status(502).end();
+              } catch {
+                /* ignore */
+              }
+            } else {
+              res.destroy();
+            }
+          }
+        });
+      } else {
+        res.end();
+      }
     }
   } catch (e) {
-    res.status(502).send('Proxy error: ' + (e && e.message ? e.message : e));
+    if (e && e.name === 'AbortError') return; // client went away — not an error
+    console.error('proxy error:', e?.message || e);
+    if (!res.headersSent) res.status(502).send('Proxy error: ' + (e?.message || e));
   }
 });
 
