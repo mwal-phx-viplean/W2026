@@ -64,28 +64,4 @@
 
   }
 
-  <!-- Embedded player: streams open here, inside the site. The remote host is
-       never shown — the iframe loads the same-origin /__feed proxy path. -->
-  @if (playerLink(); as link) {
-    <div class="player-backdrop" (click)="closePlayer()">
-      <div class="player-dialog" (click)="$event.stopPropagation()">
-        <div class="player-bar">
-          <span class="player-title">
-            ▶ {{ link.label }}@if (link.language) {<span class="text-secondary"> · {{ link.language }}</span>}
-          </span>
-          <button type="button" class="btn-close btn-close-white" aria-label="Fermer" (click)="closePlayer()"></button>
-        </div>
-        <div class="player-frame">
-          @if (playerSrc(); as src) {
-            <iframe
-              [src]="src"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-pointer-lock"
-              allow="autoplay; fullscreen; encrypted-media"
-              allowfullscreen></iframe>
-          }
-        </div>
-      </div>
-    </div>
-  }
-
 </div>

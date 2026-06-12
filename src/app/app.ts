@@ -1,8 +1,6 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { ProgParserService } from './services/prog-parser.service';
 import { ChannelLink, ProgEvent, ProgSchedule } from './models/prog.model';
-import { toFeedPath } from './feed-url';
 
 /**
  * Source URL of the schedule data — a direct .txt link.
@@ -16,28 +14,13 @@ const DATA_SOURCE_URL = 'https://sportsonline.pk/prog.txt';
   imports: [],
   templateUrl: './app.html',
   styleUrl: './app.css',
-  host: { '(document:keydown.escape)': 'closePlayer()' },
 })
 export class App implements OnInit {
   private readonly parser = inject(ProgParserService);
-  private readonly sanitizer = inject(DomSanitizer);
 
   protected readonly schedule = signal<ProgSchedule | null>(null);
   protected readonly activeDay = signal<string>('');
   protected readonly loading = signal<boolean>(true);
-
-  /** Channel currently shown in the embedded player, or null when closed. */
-  protected readonly playerLink = signal<ChannelLink | null>(null);
-
-  /**
-   * Same-origin, sanitized iframe src for the active player.
-   * Built from the `/__feed` proxy path so the real host is never exposed.
-   */
-  protected readonly playerSrc = computed<SafeResourceUrl | null>(() => {
-    const link = this.playerLink();
-    if (!link) return null;
-    return this.sanitizer.bypassSecurityTrustResourceUrl(toFeedPath(link.url));
-  });
 
   /** Events of the currently selected day. */
   protected readonly activeEvents = computed<ProgEvent[]>(() => {
@@ -72,14 +55,9 @@ export class App implements OnInit {
     this.activeDay.set(name);
   }
 
-  /** Open a channel inside the on-site player (the remote host stays hidden). */
+  /** Open the channel's real page in a new browser tab (plays natively there). */
   protected open(link: ChannelLink): void {
-    this.playerLink.set(link);
-  }
-
-  /** Close the embedded player. */
-  protected closePlayer(): void {
-    this.playerLink.set(null);
+    window.open(link.url, '_blank', 'noopener,noreferrer');
   }
 
   /** Bootstrap button color based on the channel language (visual grouping only). */
