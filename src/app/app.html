@@ -79,6 +79,7 @@
           @if (playerSrc(); as src) {
             <iframe
               [src]="src"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-pointer-lock"
               allow="autoplay; fullscreen; encrypted-media"
               allowfullscreen></iframe>
           }

@@ -135,7 +135,7 @@ app.use('/__feed', express.raw({ type: () => true, limit: '25mb' }), async (req,
     const target = `https://${host}${upath}${search}`;
 
     const headers = {};
-    for (const h of ['user-agent', 'accept', 'accept-language', 'range']) {
+    for (const h of ['user-agent', 'accept', 'accept-language', 'range', 'cookie']) {
       if (req.headers[h]) headers[h] = req.headers[h];
     }
     const fwdRef = unproxyReferer(req.headers['referer']);
@@ -161,6 +161,7 @@ app.use('/__feed', express.raw({ type: () => true, limit: '25mb' }), async (req,
       out[k] = v;
     });
     for (const h of DROP_RESPONSE_HEADERS) delete out[h];
+    delete out['set-cookie'];
     out['access-control-allow-origin'] = '*';
     out['referrer-policy'] = 'unsafe-url';
     if (out['location'] && /^https?:\/\//i.test(out['location'])) {
@@ -169,6 +170,16 @@ app.use('/__feed', express.raw({ type: () => true, limit: '25mb' }), async (req,
 
     const type = (upstream.headers.get('content-type') || '').toLowerCase();
     res.status(upstream.status);
+    // Re-home the upstream's cookies onto our origin (drop Domain, allow in the
+    // iframe) so session-protected streams keep their auth across hops.
+    const setCookies =
+      typeof upstream.headers.getSetCookie === 'function' ? upstream.headers.getSetCookie() : [];
+    for (const sc of setCookies) {
+      let c = sc.replace(/;\s*domain=[^;]*/gi, '').replace(/;\s*samesite=[^;]*/gi, '');
+      c += '; SameSite=None';
+      if (!/;\s*secure/i.test(c)) c += '; Secure';
+      res.append('Set-Cookie', c);
+    }
     if (type.includes('text/html')) {
       const buf = Buffer.from(await upstream.arrayBuffer());
       res.set(out).send(rewriteHtml(buf.toString('utf8'), host));
