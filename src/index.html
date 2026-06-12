@@ -9,18 +9,6 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <script>
-    // PWA removed — actively unregister any previously-installed service worker
-    // and clear its caches so returning visitors aren't stuck on a stale build.
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (rs) {
-        rs.forEach(function (r) { r.unregister(); });
-      });
-      if (window.caches && caches.keys) {
-        caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
-      }
-    }
-  </script>
 </head>
 <body>
   <app-root></app-root>
