@@ -57,9 +57,17 @@ export default {
       const target = `https://${host}${path}${incoming.search}`;
 
       const reqHeaders = stripRequestHeaders(request.headers);
-      // Inject the unlock referer for player pages, but NOT for the schedule
-      // `.txt` feed, whose host may hotlink-protect against a foreign referer.
-      if (!path.split('?')[0].endsWith('.txt')) {
+      // Give each upstream request the Referer it expects. The browser already
+      // sends the proxied page URL (`.../__feed/<host>/<path>`) as Referer; we
+      // just un-proxy it back to the real `https://<host>/<path>`. This yields
+      // the correct Referer at every hop: the embed page sees the channel page
+      // (ww2 -> unlock), the .m3u8 sees its own embed page, etc. Falls back to
+      // ALLOWED_REFERER for player requests with no usable Referer, and none for
+      // the schedule `.txt` feed (whose host hotlink-protects).
+      const fwdReferer = unproxyReferer(request.headers.get('referer'));
+      if (fwdReferer) {
+        reqHeaders.set('referer', fwdReferer);
+      } else if (!path.split('?')[0].endsWith('.txt')) {
         reqHeaders.set('referer', ALLOWED_REFERER);
       }
 
@@ -84,6 +92,10 @@ export default {
       headers.delete('content-encoding');
       headers.delete('content-length');
       headers.set('access-control-allow-origin', '*');
+      // Force pages to send a full Referer to their subresources so the chain
+      // above keeps working (some players set `no-referrer` to hide their .m3u8).
+      headers.delete('referrer-policy');
+      headers.set('referrer-policy', 'unsafe-url');
 
       const type = headers.get('content-type') || '';
       if (!type.includes('text/html')) {
@@ -151,6 +163,17 @@ function absToFeed(abs) {
   } catch {
     return abs;
   }
+}
+
+/** Turn a proxied Referer (`.../__feed/<host>/<path>`) back into `https://<host>/<path>`. */
+function unproxyReferer(ref) {
+  if (!ref) return null;
+  const i = ref.indexOf('/__feed/');
+  if (i === -1) return null;
+  const rest = ref.slice(i + '/__feed'.length); // -> /<host>/<path>
+  const m = rest.match(/^\/([^/]+)([^?#]*)/);
+  if (!m) return null;
+  return `https://${m[1]}${m[2] || '/'}`;
 }
 
 /**

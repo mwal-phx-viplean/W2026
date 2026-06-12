@@ -30,6 +30,17 @@ function absToFeed(abs) {
   }
 }
 
+/** Turn a proxied Referer (`.../__feed/<host>/<path>`) back into `https://<host>/<path>`. */
+function unproxyReferer(ref) {
+  if (!ref) return null;
+  const i = ref.indexOf('/__feed/');
+  if (i === -1) return null;
+  const rest = ref.slice(i + '/__feed'.length);
+  const m = rest.match(/^\/([^/]+)([^?#]*)/);
+  if (!m) return null;
+  return `https://${m[1]}${m[2] || '/'}`;
+}
+
 /** Map a URL found in a page to its `/__feed/<host>/...` equivalent. */
 function proxify(value, currentHost) {
   const v = String(value).trim();
@@ -105,10 +116,17 @@ const entry = {
   configure(proxy) {
     proxy.on('proxyReq', (proxyReq, req) => {
       proxyReq.setHeader('accept-encoding', 'identity'); // so we can rewrite HTML as text
-      // Unlock domain-protected players, but NOT the schedule `.txt` feed (its
-      // host may hotlink-protect against a foreign referer).
-      if (!(req.url || '').split('?')[0].endsWith('.txt')) {
+      // Give each upstream the Referer it expects: un-proxy the browser's Referer
+      // (`.../__feed/<host>/<path>` -> `https://<host>/<path>`) so the embed sees
+      // the channel page (ww2 -> unlock) and the .m3u8 sees its own embed page.
+      // Fall back to ALLOWED_REFERER for players, none for the schedule `.txt`.
+      const fwdRef = unproxyReferer(req.headers['referer']);
+      if (fwdRef) {
+        proxyReq.setHeader('referer', fwdRef);
+      } else if (!(req.url || '').split('?')[0].endsWith('.txt')) {
         proxyReq.setHeader('referer', ALLOWED_REFERER);
+      } else {
+        proxyReq.removeHeader('referer');
       }
       // Capture THIS request's upstream host now (synchronous, before the shared
       // `entry.target` can be reassigned by a later concurrent request).
@@ -129,6 +147,9 @@ const entry = {
       const loc = headers['location'];
       if (typeof loc === 'string' && /^https?:\/\//i.test(loc)) headers['location'] = absToFeed(loc);
       headers['access-control-allow-origin'] = '*';
+      // Force pages to send a full Referer to their subresources (some players
+      // set `no-referrer` to hide their .m3u8 — that would break the chain).
+      headers['referrer-policy'] = 'unsafe-url';
 
       const type = String(proxyRes.headers['content-type'] || '').toLowerCase();
       if (type.includes('text/html')) {
